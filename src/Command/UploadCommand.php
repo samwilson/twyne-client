@@ -13,6 +13,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Mime\Part\DataPart;
 use Symfony\Component\Mime\Part\Multipart\FormDataPart;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class UploadCommand extends Command
 {
@@ -38,8 +39,8 @@ class UploadCommand extends Command
                 'The timezone of the times in the EXIF data of any uploaded photos.',
                 'Z'
             )
-            ->addOption('author', 'a', InputOption::VALUE_REQUIRED, 'Author name.')
-            ->addOption('group', 'g', InputOption::VALUE_REQUIRED, 'The name of the user group.', '1');
+            ->addOption('author', 'a', InputOption::VALUE_REQUIRED, 'Author name.', 'Anon.')
+            ->addOption('group', 'g', InputOption::VALUE_REQUIRED, 'The name of the user group.', 'Private');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -97,24 +98,26 @@ class UploadCommand extends Command
         }
 
         $client = HttpClient::create();
+        $authHeader = 'Twyne api_key=' . $this->input->getOption('apikey');
         // Check by checksum.
         $options = [
             'query' => [
-                'api_key' => $this->input->getOption('apikey'),
                 'checksums' => sha1_file($filename),
             ],
+            'headers' => [
+                'Authorization' => $authHeader,
+            ],
         ];
-        $response1 = $client->request('GET', $url . '/post/search', $options);
-        $response1Data = json_decode($response1->getContent(false), true);
-        if ($response1Data && $response1Data['post_count'] > 0) {
-            $this->output->writeln('Already exists as P' . $response1Data['posts'][0]['id'] . ': ' . $filename);
+        $response1Data = $client->request('GET', $url . '/post/search', $options);
+        $response1 = $this->getJson($response1Data);
+        if ($response1['post_count'] > 0) {
+            $this->output->writeln('Already exists as ' . $response1['posts'][0]['url'] . ' -- ' . $filename);
             return;
         }
 
         $this->output->write('Uploading ' . $filename . ' . . . ');
 
         $formFields = [
-            'api_key' => $this->input->getOption('apikey'),
             'tags' => $this->input->getOption('tags'),
             'timezone' => $this->input->getOption('timezone'),
             'author' => $authorName,
@@ -123,20 +126,32 @@ class UploadCommand extends Command
         ];
         $formData = new FormDataPart($formFields);
         $options = [
-            'headers' => $formData->getPreparedHeaders()->toArray(),
+            'headers' => array_merge($formData->getPreparedHeaders()->toArray(), ['Authorization' => $authHeader]),
             'body' => $formData->bodyToIterable(),
         ];
-        $response2Data = $client->request('POST', $url . '/upload-api', $options)->getContent(false);
-        $response2 = json_decode($response2Data, true);
-        if (!$response2) {
-            throw new Exception('Unable to decode response: ' . $response2Data);
-        }
+        $response2Data = $client->request('POST', $url . '/upload-api', $options);
+        $response2 = $this->getJson($response2Data);
         if (isset($response2['upload_count']) && $response2['upload_count'] > 0) {
-            $this->output->writeln('<info>OK</info>');
+            foreach ($response2['success'] as $success) {
+                $this->output->writeln('<info>' . $success . '</info>');
+            }
         } elseif (isset($response2['fail'])) {
             foreach ($response2['fail'] as $failure) {
                 $this->output->error($failure);
             }
         }
+    }
+
+    private function getJson(ResponseInterface $response): array
+    {
+        $responseContent = $response->getContent(false);
+        $responseData = json_decode($responseContent, true);
+        if (!$responseData) {
+            throw new Exception('Unable to decode response: ' . $responseContent);
+        }
+        if (isset($responseData['error'])) {
+            throw new Exception('Error: ' . $responseData['error']);
+        }
+        return $responseData;
     }
 }
