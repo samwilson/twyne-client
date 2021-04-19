@@ -22,7 +22,9 @@ class UploadCommand extends CommandBase
 
     protected function configure()
     {
+        // Get config to show actual defaults in the help output.
         $config = $this->getConfig();
+        // Prevent the actual API key from appearing in the help output.
         $apiKeyDefault = !empty($config['api_key']) ? '[Stored in config]' : '';
         $this->setName('upload')
             ->setDescription('Upload files.')
