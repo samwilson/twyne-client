@@ -1,7 +1,9 @@
 #!/usr/bin/env php
 <?php
 
+use Samwilson\ConsoleReadmeGenerator\Command\ReadmeGenCommand;
 use Symfony\Component\Console\Application;
+use Twyne\Client\Command\ConfigureCommand;
 use Twyne\Client\Command\UploadCommand;
 
 if (!in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed'], true)) {
@@ -16,6 +18,8 @@ $application = new Application('Twyne Client');
 
 $application->addCommands([
     new UploadCommand(),
+    new ConfigureCommand(),
+    new ReadmeGenCommand(),
 ]);
 
 $application->run();
