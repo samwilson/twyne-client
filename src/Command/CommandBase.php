@@ -18,6 +18,9 @@ abstract class CommandBase extends Command
     /** @var SymfonyStyle */
     protected $output;
 
+    /** @var array Runtime cache of the config data. */
+    private $config;
+
     protected function configure()
     {
     }
@@ -47,11 +50,14 @@ abstract class CommandBase extends Command
 
     protected function getConfig(): array
     {
-        $configFile = $this->getConfigFilename();
-        $config = $this->getDefaultConfig();
-        if (file_exists($configFile)) {
-            $config = array_merge($config, Yaml::parseFile($configFile));
+        if ($this->config) {
+            return $this->config;
         }
-        return $config;
+        $configFile = $this->getConfigFilename();
+        $this->config = $this->getDefaultConfig();
+        if (file_exists($configFile)) {
+            $this->config = array_merge($this->config, Yaml::parseFile($configFile));
+        }
+        return $this->config;
     }
 }
