@@ -12,6 +12,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Mime\Part\DataPart;
 use Symfony\Component\Mime\Part\Multipart\FormDataPart;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class UploadCommand extends CommandBase
@@ -19,6 +20,15 @@ class UploadCommand extends CommandBase
 
     /** @var string */
     private $url;
+
+    /** @var string */
+    private $authorName;
+
+    /** @var string */
+    private $authHeader;
+
+    /** @var HttpClientInterface */
+    private $client;
 
     protected function configure()
     {
@@ -70,6 +80,18 @@ class UploadCommand extends CommandBase
             return Command::FAILURE;
         }
 
+        $this->authorName = $this->input->getOption('author');
+        if (!$this->authorName) {
+            throw new Exception('Required option: author');
+        }
+
+        $this->client = HttpClient::create();
+        $apiKey = $this->input->getOption('apikey');
+        if (!empty($apiKey)) {
+            $apiKey = $this->getConfig()['api_key'];
+        }
+        $this->authHeader = 'Twyne api_key=' . $apiKey;
+
         // Upload.
         if (is_dir($source)) {
             $this->uploadDirectory($source);
@@ -82,7 +104,8 @@ class UploadCommand extends CommandBase
 
     private function uploadDirectory(string $dir): void
     {
-        foreach (new DirectoryIterator($dir) as $file) {
+        $iterator = new DirectoryIterator($dir);
+        foreach ($iterator as $file) {
             if ($file->isDot()) {
                 continue;
             }
@@ -93,6 +116,10 @@ class UploadCommand extends CommandBase
             }
 
             if ($file->isFile()) {
+                if (!in_array(strtolower($file->getExtension()), ['jpg', 'jpeg', 'gif', 'pdf', 'png'])) {
+                    $this->output->writeln('Unable to upload ' . $file->getExtension() . ' files.');
+                    continue;
+                }
                 $this->uploadOne($file->getPathname());
                 continue;
             }
@@ -101,28 +128,16 @@ class UploadCommand extends CommandBase
 
     private function uploadOne(string $filename): void
     {
-
-        $authorName = $this->input->getOption('author');
-        if (!$authorName) {
-            throw new Exception('Required option: author');
-        }
-
-        $client = HttpClient::create();
-        $apiKey = $this->input->getOption('apikey');
-        if (!empty($apiKey)) {
-            $apiKey = $this->getConfig()['api_key'];
-        }
-        $authHeader = 'Twyne api_key=' . $apiKey;
         // Check by checksum.
         $options = [
             'query' => [
                 'checksums' => sha1_file($filename),
             ],
             'headers' => [
-                'Authorization' => $authHeader,
+                'Authorization' => $this->authHeader,
             ],
         ];
-        $response1Data = $client->request('GET', $this->url . '/post/search', $options);
+        $response1Data = $this->client->request('GET', $this->url . '/post/search', $options);
         $response1 = $this->getJson($response1Data);
         if ($response1['post_count'] > 0) {
             $this->output->writeln('Already exists as ' . $response1['posts'][0]['url'] . ' -- ' . $filename);
@@ -131,19 +146,21 @@ class UploadCommand extends CommandBase
 
         $this->output->write('Uploading ' . $filename . ' . . . ');
 
+        $dataPart = DataPart::fromPath($filename);
         $formFields = [
             'tags' => $this->input->getOption('tags'),
             'timezone' => $this->input->getOption('timezone'),
-            'author' => $authorName,
+            'author' => $this->authorName,
             'view_group' => $this->input->getOption('group'),
-            'files' => [DataPart::fromPath($filename)],
+            'files' => [$dataPart],
         ];
         $formData = new FormDataPart($formFields);
+        $headers = array_merge($formData->getPreparedHeaders()->toArray(), ['Authorization' => $this->authHeader]);
         $options = [
-            'headers' => array_merge($formData->getPreparedHeaders()->toArray(), ['Authorization' => $authHeader]),
+            'headers' => $headers,
             'body' => $formData->bodyToIterable(),
         ];
-        $response2Data = $client->request('POST', $this->url . '/upload-api', $options);
+        $response2Data = $this->client->request('POST', $this->url . '/upload-api', $options);
         $response2 = $this->getJson($response2Data);
         if (isset($response2['upload_count']) && $response2['upload_count'] > 0) {
             foreach ($response2['success'] as $success) {
