@@ -148,7 +148,7 @@ class UploadCommand extends CommandBase
 
         $dataPart = DataPart::fromPath($filename);
         $formFields = [
-            'tags' => $this->input->getOption('tags'),
+            'tags' => explode(',', $this->input->getOption('tags')),
             'timezone' => $this->input->getOption('timezone'),
             'author' => $this->authorName,
             'view_group' => $this->input->getOption('group'),
