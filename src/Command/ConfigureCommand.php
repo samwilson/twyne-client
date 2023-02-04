@@ -9,7 +9,6 @@ use Symfony\Component\Yaml\Yaml;
 
 class ConfigureCommand extends CommandBase
 {
-
     protected function configure()
     {
         $this->setName('configure')
