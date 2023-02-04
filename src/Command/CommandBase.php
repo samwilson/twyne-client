@@ -11,7 +11,6 @@ use XdgBaseDir\Xdg;
 
 abstract class CommandBase extends Command
 {
-
     /** @var InputInterface */
     protected $input;
 

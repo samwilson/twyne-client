@@ -17,7 +17,6 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class UploadCommand extends CommandBase
 {
-
     /** @var string */
     private $url;
 
@@ -158,7 +157,7 @@ class UploadCommand extends CommandBase
         $headers = array_merge($formData->getPreparedHeaders()->toArray(), ['Authorization' => $this->authHeader]);
         $options = [
             'headers' => $headers,
-            'body' => $formData->bodyToIterable(),
+            'body' => $formData->bodyToString(),
         ];
         $response2Data = $this->client->request('POST', $this->url . '/upload-api', $options);
         $response2 = $this->getJson($response2Data);
